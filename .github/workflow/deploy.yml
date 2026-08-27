@@ -1,0 +1,37 @@
+name: Deploy Laravel API to VPS
+
+		on:
+		  push:
+			branches:
+			  - main # Workflow terpicu otomatis saat push ke branch main
+
+		jobs:
+		  deploy:
+			runs-on: ubuntu-latest
+
+			steps:
+			  - name: Deploying code via SSH
+				uses: appleboy/ssh-action@v1.0.3
+				with:
+				  host: ${{ secrets.VPS_HOST }}
+				  username: ${{ secrets.VPS_USERNAME }}
+				  port: ${{ secrets.VPS_PORT }}
+				  key: ${{ secrets.VPS_SSH_KEY }}
+				  script: |
+					cd /var/www/catalog-api
+
+					# 1. Menarik commit/kode terbaru dari branch main
+					git pull origin main
+
+					# 2. Re-apply container (Hanya me-recreate jika ada perubahan .env / compose)
+					docker compose -f docker-compose.prod.yml up -d
+
+					# 3. Menginstal ulang dependency vendor jika ada perubahan composer.json
+					docker compose -f docker-compose.prod.yml exec --user 1000:1000 app composer install --optimize-autoloader --no-dev
+
+					# 4. Mengesekusi migrasi database otomatis jika ada file migration baru
+					docker compose -f docker-compose.prod.yml exec --user 1000:1000 app php artisan migrate --force
+
+					# 5. Refresh & Optimize konfigurasi Laravel
+					docker compose -f docker-compose.prod.yml exec --user 1000:1000 app php artisan optimize
+
