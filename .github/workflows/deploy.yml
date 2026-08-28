@@ -1,4 +1,3 @@
-# 50 detik downtime, deploy tetap di jam tidak ada pemakaian user
 name: Deploy Laravel API to VPS
 
 on:
@@ -19,14 +18,30 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /var/www/taskapi
-            # 1. Menarik commit/kode terbaru dari branch main
+            cd /var/www/catalog-api
+            # 1. Simpan commit hash sebelum git pull untuk deteksi perubahan
+            PREV_COMMIT=$(git rev-parse HEAD)
+
+            # 2. pull commit/kode terbaru dari branch main
             git pull origin main
-            # 2. Re-apply container (Hanya me-recreate jika ada perubahan .env / compose)
-            docker compose -f docker-compose.prod.yml up -d
-            # 3. Menginstal ulang dependency vendor jika ada perubahan composer.json
+
+            # 3. Cek apakah file compose/env berubah. Jika YA, jalankan docker compose up -d
+            if git diff --name-only $PREV_COMMIT HEAD | grep -E '(docker-compose.prod.yml|\.env)'; then
+              echo "Konfigurasi Docker/.env berubah. Reloading containers..."
+              docker compose -f docker-compose.prod.yml up -d --wait
+            fi
+
+            # 4. Menginstal ulang dependency vendor jika ada perubahan composer.json
             docker compose -f docker-compose.prod.yml exec --user 1000:1000 app composer install --optimize-autoloader --no-dev
-            # 4. Mengesekusi migrasi database otomatis jika ada file migration baru
+
+            # 5. Mengesekusi migrasi database otomatis
             docker compose -f docker-compose.prod.yml exec --user 1000:1000 app php artisan migrate --force
-            # 5. Refresh & Optimize konfigurasi Laravel
+
+            # 6. Refresh & Optimize konfigurasi Laravel
             docker compose -f docker-compose.prod.yml exec --user 1000:1000 app php artisan optimize
+
+# Zero-Downtime Deployment (Poin Utama): Untuk push harian yang hanya mengubah kode PHP/Laravel, Docker tidak akan restart. Aplikasi tetap menyala 100% tanpa ada downtime 50 detik.
+
+# Otomatis & Efisien: Jika kamu mengubah file docker-compose.prod.yml atau .env, skrip git diff akan mendeteksinya secara otomatis dan baru menjalankan docker-compose.prod.yml up -d --wait
+
+# Parameter --wait: Menjamin Docker menunggu status healthcheck MySQL & App healthy sebelum melangkah ke perintah Composer/Artisan berikutnya. Ini mencegah error connection refused.
