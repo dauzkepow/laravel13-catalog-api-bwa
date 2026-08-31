@@ -16,10 +16,13 @@ class ProductController extends Controller
     // index() - list + paginate + optional filter
     public function index(Request $request): AnonymousResourceCollection
     {
+        // implement type config
+        $perPage = config()->integer('api.per_page', 15);
+
         $products = Product::query()
             ->when($request->boolean('active_only'), fn ($q) => $q->where('is_active', true))
             ->orderBy('created_at', 'desc')
-            ->paginate(15);
+            ->paginate($perPage);
 
         return ProductResource::collection($products);
     }

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route;
 //     return $request->user();
 // })->middleware('auth:sanctum');
 
-// dengan prefix V1, semua routes jadi /api/v1/products
+// dengan prefix versioning V1, semua routes jadi /api/v1/products
 Route::prefix('v1')->group(function () {
     // apiResource auto generate 5 route: index, show, store, update, destroy
     // Route::apiResource('products', ProductController::class);
